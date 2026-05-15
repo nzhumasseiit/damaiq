@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": ".tmp/test-build",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["lib/**/*.ts", "test/**/*.ts"]
+}
