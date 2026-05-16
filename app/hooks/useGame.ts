@@ -23,11 +23,13 @@ export type UseGameState = {
   moveHistory: Move[];
   gameMode: GameMode;
   aiDifficulty: AiDifficulty;
+  isCasualMode: boolean;
   isAiThinking: boolean;
   lastMove: Move | null;
   lastMoveBy: Player | "ai" | null;
   setGameMode: (mode: GameMode) => void;
   setAiDifficulty: (difficulty: AiDifficulty) => void;
+  setIsCasualMode: (enabled: boolean) => void;
   selectSquare: (index: number) => void;
   resetGame: () => void;
 };
@@ -40,6 +42,7 @@ export function useGame(): UseGameState {
   const [moveHistory, setMoveHistory] = useState<Move[]>([]);
   const [gameMode, setGameModeState] = useState<GameMode>("pvp");
   const [aiDifficulty, setAiDifficulty] = useState<AiDifficulty>("medium");
+  const [isCasualMode, setIsCasualModeState] = useState(false);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [lastMove, setLastMove] = useState<Move | null>(null);
   const [lastMoveBy, setLastMoveBy] = useState<Player | "ai" | null>(null);
@@ -51,7 +54,7 @@ export function useGame(): UseGameState {
 
     const delay = 600 + Math.random() * 300;
     const timeout = window.setTimeout(() => {
-      const aiMove = getBestMove(board, aiDifficulty);
+      const aiMove = getBestMove(board, aiDifficulty, { casualMode: isCasualMode });
       const nextBoard = applyMove(board, aiMove);
       setBoard(nextBoard);
       setGameHistory((history) => [...history, nextBoard]);
@@ -62,7 +65,7 @@ export function useGame(): UseGameState {
     }, delay);
 
     return () => window.clearTimeout(timeout);
-  }, [aiDifficulty, board, gameMode]);
+  }, [aiDifficulty, board, gameMode, isCasualMode]);
 
   function clearSelection() {
     setSelectedSquare(null);
@@ -93,7 +96,7 @@ export function useGame(): UseGameState {
       return;
     }
 
-    const moves = getMovesForPiece(board, index);
+    const moves = getMovesForPiece(board, index, { casualMode: isCasualMode });
     if (moves.length === 0) {
       clearSelection();
       return;
@@ -119,6 +122,11 @@ export function useGame(): UseGameState {
     resetGame();
   }
 
+  function setIsCasualMode(enabled: boolean) {
+    setIsCasualModeState(enabled);
+    clearSelection();
+  }
+
   return {
     board,
     selectedSquare,
@@ -127,11 +135,13 @@ export function useGame(): UseGameState {
     moveHistory,
     gameMode,
     aiDifficulty,
+    isCasualMode,
     isAiThinking,
     lastMove,
     lastMoveBy,
     setGameMode,
     setAiDifficulty,
+    setIsCasualMode,
     selectSquare,
     resetGame,
   };

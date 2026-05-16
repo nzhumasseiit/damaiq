@@ -1,6 +1,7 @@
 import {
   type Board,
   type Move,
+  type MoveGenerationOptions,
   type Piece,
   type Player,
   applyMove,
@@ -19,8 +20,12 @@ const KING_CENTER_BONUS = 14;
 const MOBILITY_BONUS = 4;
 const BACK_ROW_BONUS = 18;
 
-export function getBestMove(board: Board, difficulty: AiDifficulty): Move {
-  const legalMoves = getLegalMoves(board);
+export function getBestMove(
+  board: Board,
+  difficulty: AiDifficulty,
+  options: MoveGenerationOptions = {},
+): Move {
+  const legalMoves = getLegalMoves(board, options);
   if (legalMoves.length === 0) {
     throw new Error("AI cannot move because there are no legal moves.");
   }
@@ -28,7 +33,7 @@ export function getBestMove(board: Board, difficulty: AiDifficulty): Move {
   if (difficulty === "easy") return randomMove(legalMoves);
   if (difficulty === "medium") return getMediumMove(legalMoves);
 
-  return getHardMove(board, legalMoves);
+  return getHardMove(board, legalMoves, options);
 }
 
 function getMediumMove(legalMoves: Move[]): Move {
@@ -39,7 +44,7 @@ function getMediumMove(legalMoves: Move[]): Move {
   return randomMove(captures.filter((move) => move.captures.length === longestCapture));
 }
 
-function getHardMove(board: Board, legalMoves: Move[]): Move {
+function getHardMove(board: Board, legalMoves: Move[], options: MoveGenerationOptions): Move {
   const rootPlayer = board.turn;
   let bestScore = Number.NEGATIVE_INFINITY;
   const bestMoves: Move[] = [];
@@ -52,6 +57,7 @@ function getHardMove(board: Board, legalMoves: Move[]): Move {
       Number.NEGATIVE_INFINITY,
       Number.POSITIVE_INFINITY,
       rootPlayer,
+      options,
     );
 
     if (score > bestScore) {
@@ -72,23 +78,27 @@ function minimax(
   alpha: number,
   beta: number,
   rootPlayer: Player,
+  options: MoveGenerationOptions,
 ): number {
   const winner = getWinner(board);
   if (winner) {
     return winner === rootPlayer ? WIN_SCORE + depth : -WIN_SCORE - depth;
   }
 
-  if (depth === 0) return evaluateBoard(board, rootPlayer);
+  if (depth === 0) return evaluateBoard(board, rootPlayer, options);
 
-  const legalMoves = getLegalMoves(board);
-  if (legalMoves.length === 0) return evaluateBoard(board, rootPlayer);
+  const legalMoves = getLegalMoves(board, options);
+  if (legalMoves.length === 0) return evaluateBoard(board, rootPlayer, options);
 
   const maximizing = board.turn === rootPlayer;
 
   if (maximizing) {
     let score = Number.NEGATIVE_INFINITY;
     for (const move of orderedMoves(legalMoves)) {
-      score = Math.max(score, minimax(applyMove(board, move), depth - 1, alpha, beta, rootPlayer));
+      score = Math.max(
+        score,
+        minimax(applyMove(board, move), depth - 1, alpha, beta, rootPlayer, options),
+      );
       alpha = Math.max(alpha, score);
       if (beta <= alpha) break;
     }
@@ -97,20 +107,23 @@ function minimax(
 
   let score = Number.POSITIVE_INFINITY;
   for (const move of orderedMoves(legalMoves)) {
-    score = Math.min(score, minimax(applyMove(board, move), depth - 1, alpha, beta, rootPlayer));
+    score = Math.min(
+      score,
+      minimax(applyMove(board, move), depth - 1, alpha, beta, rootPlayer, options),
+    );
     beta = Math.min(beta, score);
     if (beta <= alpha) break;
   }
   return score;
 }
 
-function evaluateBoard(board: Board, rootPlayer: Player): number {
-  const ownScore = evaluateForPlayer(board, rootPlayer);
-  const opponentScore = evaluateForPlayer(board, opponent(rootPlayer));
+function evaluateBoard(board: Board, rootPlayer: Player, options: MoveGenerationOptions): number {
+  const ownScore = evaluateForPlayer(board, rootPlayer, options);
+  const opponentScore = evaluateForPlayer(board, opponent(rootPlayer), options);
   return ownScore - opponentScore;
 }
 
-function evaluateForPlayer(board: Board, player: Player): number {
+function evaluateForPlayer(board: Board, player: Player, options: MoveGenerationOptions): number {
   let score = 0;
 
   for (let index = 0; index < board.cells.length; index += 1) {
@@ -129,7 +142,7 @@ function evaluateForPlayer(board: Board, player: Player): number {
     }
   }
 
-  return score + getLegalMoves({ ...board, turn: player }).length * MOBILITY_BONUS;
+  return score + getLegalMoves({ ...board, turn: player }, options).length * MOBILITY_BONUS;
 }
 
 function orderedMoves(moves: Move[]): Move[] {

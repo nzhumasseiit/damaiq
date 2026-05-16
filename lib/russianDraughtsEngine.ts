@@ -31,6 +31,10 @@ export type Move = {
   notation: string;
 };
 
+export type MoveGenerationOptions = {
+  casualMode?: boolean;
+};
+
 type Direction = readonly [dx: number, dy: number];
 
 const DIRECTIONS = [
@@ -54,23 +58,21 @@ export function createInitialBoard(): Board {
   };
 }
 
-export function getLegalMoves(board: Board): Move[] {
+export function getLegalMoves(board: Board, options: MoveGenerationOptions = {}): Move[] {
   assertBoard(board);
 
   const captures = getAllCaptures(board);
-  if (captures.length > 0) return captures;
+  if (captures.length > 0 && !options.casualMode) return captures;
 
-  const moves: Move[] = [];
-  for (let index = 0; index < 32; index += 1) {
-    const piece = board.cells[index];
-    if (piece && colorOf(piece) === board.turn) {
-      moves.push(...getQuietMovesForPiece(board, index, piece));
-    }
-  }
-  return moves;
+  const quietMoves = getAllQuietMoves(board);
+  return options.casualMode ? [...captures, ...quietMoves] : quietMoves;
 }
 
-export function getMovesForPiece(board: Board, position: Position): Move[] {
+export function getMovesForPiece(
+  board: Board,
+  position: Position,
+  options: MoveGenerationOptions = {},
+): Move[] {
   assertBoard(board);
 
   const from = normalizePosition(position);
@@ -78,17 +80,21 @@ export function getMovesForPiece(board: Board, position: Position): Move[] {
   if (!piece || colorOf(piece) !== board.turn) return [];
 
   const pieceCaptures = getCaptureMovesForPiece(board, from, piece);
-  if (getAllCaptures(board).length > 0) return pieceCaptures;
+  if (getAllCaptures(board).length > 0 && !options.casualMode) return pieceCaptures;
 
   return [...pieceCaptures, ...getQuietMovesForPiece(board, from, piece)];
 }
 
-export function applyMove(board: Board, move: Move | string): Board {
+export function applyMove(
+  board: Board,
+  move: Move | string,
+  options: MoveGenerationOptions = {},
+): Board {
   assertBoard(board);
 
   const resolvedMove =
     typeof move === "string"
-      ? getLegalMoves(board).find((candidate) => candidate.notation === move)
+      ? getLegalMoves(board, options).find((candidate) => candidate.notation === move)
       : move;
 
   if (!resolvedMove) {
@@ -163,6 +169,17 @@ function getAllCaptures(board: Board): Move[] {
     }
   }
   return captures;
+}
+
+function getAllQuietMoves(board: Board): Move[] {
+  const moves: Move[] = [];
+  for (let index = 0; index < 32; index += 1) {
+    const piece = board.cells[index];
+    if (piece && colorOf(piece) === board.turn) {
+      moves.push(...getQuietMovesForPiece(board, index, piece));
+    }
+  }
+  return moves;
 }
 
 function getCaptureMovesForPiece(board: Board, from: number, piece: Piece): Move[] {

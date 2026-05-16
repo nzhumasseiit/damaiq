@@ -51,6 +51,23 @@ test("mandatory capture", () => {
   assert.deepEqual(notations(board), ["c3:e5"]);
 });
 
+test("casual mode allows quiet moves when captures exist", () => {
+  const board = place(place(emptyBoard(), "c3", "whiteMan"), "d4", "blackMan");
+
+  assert.deepEqual(
+    getLegalMoves(board, { casualMode: true })
+      .map((move) => move.notation)
+      .sort(),
+    ["c3-b4", "c3:e5"],
+  );
+  assert.deepEqual(
+    getMovesForPiece(board, "c3", { casualMode: true })
+      .map((move) => move.notation)
+      .sort(),
+    ["c3-b4", "c3:e5"],
+  );
+});
+
 test("multi-capture", () => {
   const board = place(
     place(place(emptyBoard(), "c3", "whiteMan"), "d4", "blackMan"),

@@ -34,17 +34,22 @@ export default function Board() {
     moveHistory,
     gameMode,
     aiDifficulty,
+    isCasualMode,
     isAiThinking,
     lastMove,
     lastMoveBy,
     setGameMode,
     setAiDifficulty,
+    setIsCasualMode,
     selectSquare,
     resetGame,
   } = useGame();
 
   const winner = useMemo(() => getWinner(board), [board]);
-  const legalMoves = useMemo(() => getLegalMoves(board), [board]);
+  const legalMoves = useMemo(
+    () => getLegalMoves(board, { casualMode: isCasualMode }),
+    [board, isCasualMode],
+  );
   const showHumanMoveHints = !(gameMode === "ai" && board.turn === "black");
   const selectableSquares = useMemo(
     () => new Set(showHumanMoveHints ? legalMoves.map((move) => move.from) : []),
@@ -247,10 +252,12 @@ export default function Board() {
           <InfoPanel
             aiDifficulty={aiDifficulty}
             gameMode={gameMode}
+            isCasualMode={isCasualMode}
             isDark={isDark}
             language={language}
             moveCount={gameHistory.length - 1}
             newGame={newGame}
+            setIsCasualMode={setIsCasualMode}
             status={status.text}
           />
           <MoveHistory isDark={isDark} language={language} moves={moveHistory} />
@@ -518,18 +525,22 @@ function DifficultyPill({
 function InfoPanel({
   aiDifficulty,
   gameMode,
+  isCasualMode,
   isDark,
   language,
   moveCount,
   newGame,
+  setIsCasualMode,
   status,
 }: {
   aiDifficulty: AiDifficulty;
   gameMode: GameMode;
+  isCasualMode: boolean;
   isDark: boolean;
   language: Language;
   moveCount: number;
   newGame: () => void;
+  setIsCasualMode: (enabled: boolean) => void;
   status: string;
 }) {
   return (
@@ -558,6 +569,40 @@ function InfoPanel({
             )}
           >
             {t("newGame", language)}
+          </button>
+        </div>
+        <div
+          className={classNames(
+            "flex items-center justify-between gap-4 rounded-2xl border px-4 py-3",
+            isDark ? "border-[#2A2A2A] bg-white/[0.03]" : "border-stone-200 bg-stone-50",
+          )}
+        >
+          <div>
+            <p className={eyebrowClassName(isDark)}>{t("settings", language)}</p>
+            <p className={classNames("mt-1 text-sm font-bold", isDark ? "text-[#F5F5F5]" : "text-stone-950")}>
+              {t("casualMode", language)}
+            </p>
+            <p className={classNames("mt-1 text-xs leading-5", isDark ? "text-[#888]" : "text-stone-500")}>
+              {t("casualModeDesc", language)}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={isCasualMode}
+            aria-label={t("casualMode", language)}
+            onClick={() => setIsCasualMode(!isCasualMode)}
+            className={classNames(
+              "relative h-7 w-12 shrink-0 rounded-full transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
+              isCasualMode ? "bg-[#F59E0B]" : isDark ? "bg-[#2A2A2A]" : "bg-stone-300",
+            )}
+          >
+            <span
+              className={classNames(
+                "absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition duration-200 ease-in-out",
+                isCasualMode && "translate-x-5",
+              )}
+            />
           </button>
         </div>
       </div>
