@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DamaIQ
 
-## Getting Started
+DamaIQ — это веб-платформа для игры в русские шашки с AI-разбором партии.
 
-First, run the development server:
+Идея простая: сыграть партию, посмотреть, где были сильные и слабые ходы, и понять, как играть лучше. В отличие от обычной онлайн-доски, DamaIQ делает акцент не только на самой игре, но и на обучении: здесь есть правила русских шашек, игра против ИИ, история ходов и coach mode с разбором через Claude.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Почему DamaIQ?
+
+Многие онлайн-версии шашек либо слишком простые, либо используют правила, которые не совпадают с привычными русскими шашками. Для игроков из Казахстана и постсоветского региона это важно: дамки должны ходить на дальнюю дистанцию, обычные шашки должны бить назад, а взятия должны быть обязательными.
+
+DamaIQ делает знакомую игру более современной, удобной и полезной для развития стратегического мышления.
+
+## Возможности
+
+- Полноценная игра в русские шашки на доске 8x8
+- 32 игровые тёмные клетки
+- Обязательные взятия
+- Цепочки взятий
+- Дамки, которые ходят и бьют на дальнюю дистанцию
+- Обычные шашки могут бить назад
+- Превращение в дамку во время цепочки взятий
+- История ходов в нотации вроде `c3-d4` и `e5:g7`
+- Режим игрок против игрока
+- Режим игрок против ИИ
+- Три уровня сложности ИИ:
+  - лёгкий: случайные легальные ходы
+  - средний: выбирает взятия и длинные цепочки
+  - сложный: minimax с alpha-beta pruning
+- AI-разбор партии через Claude
+- Локализация на русском и казахском языках
+- Светлая и тёмная темы
+
+## AI Coach
+
+После партии игрок может запросить разбор через AI Coach.
+
+Coach анализирует историю ходов и даёт короткий фидбек:
+
+- ключевые моменты партии;
+- сильные ходы;
+- упущенные возможности;
+- рискованные решения;
+- практические советы для следующей игры.
+
+Разбор выполняется на серверной стороне через Claude API, поэтому API-ключ не попадает во frontend.
+
+## Технологии
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS 4
+- Anthropic Claude API
+- canvas-confetti
+- Node test runner
+
+## Игровая логика
+
+Логика русских шашек отделена от интерфейса и реализована на TypeScript.
+
+UI не решает самостоятельно, какие ходы разрешены. Вместо этого интерфейс обращается к движку, получает список легальных ходов и применяет выбранный ход через отдельный слой игровой логики.
+
+Основной файл движка:
+
+```txt
+lib/russianDraughtsEngine.ts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Credits
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Логика генерации ходов для русских шашек была разработана с опорой на open-source проект `damka` Антона Медведева:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- https://github.com/antonmedv/damka
 
-## Learn More
+Оригинальный проект написан на Go и реализует правила русских шашек, AI с minimax и alpha-beta pruning, а также логику доски и фигур. В DamaIQ эта логика была адаптирована и переписана на TypeScript под архитектуру Next.js-приложения.
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+DamaIQ не является официальным форком и не связан с оригинальным проектом.
