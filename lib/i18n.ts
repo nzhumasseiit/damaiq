@@ -1,0 +1,130 @@
+export const DEFAULT_LANGUAGE = "ru";
+
+export const translations = {
+  ru: {
+    appName: "DamaIQ",
+    appTitle: "Русские шашки",
+    aiThinking: "ИИ думает...",
+    aiWins: "ИИ победил 😔",
+    analyzeGame: "Разобрать партию с ИИ",
+    analysisLoading: "ИИ разбирает партию",
+    analysisUnavailable: "Разбор недоступен. Попробуйте ещё раз.",
+    bestMoment: "Лучший момент",
+    blackTurn: "Ход чёрных",
+    blackWins: "Чёрные победили",
+    blackPiece: "чёрная шашка",
+    draw: "Ничья",
+    darkTheme: "Тёмная тема",
+    easy: "Лёгкий",
+    easyDesc: "Случайные ходы — для новичков",
+    emptySquare: "Пустая клетка",
+    gameMode: "Режим игры",
+    hard: "Сложный",
+    hardDesc: "Полный минимакс — играет почти идеально",
+    king: "дамка",
+    closeAnalysis: "Закрыть разбор",
+    kkLanguage: "ҚАЗ",
+    legalMove: "доступный ход",
+    lightTheme: "Светлая тема",
+    localPlayDesc: "Локальная игра по очереди",
+    medium: "Средний",
+    mediumDesc: "Предпочитает взятия — настоящий вызов",
+    moveCount: "Количество ходов",
+    moveHistory: "История ходов",
+    noMoves: "Ходы появятся здесь",
+    movesPlayed: "ходов",
+    newGame: "Новая игра",
+    playAiDesc: "Играйте белыми против DamaIQ",
+    playerInfo: "Партия",
+    rating: "Оценка",
+    ruLanguage: "RU",
+    selectPiece: "Выберите шашку",
+    startGame: "Начать игру",
+    tagline: "Играй. Проигрывай. Становись лучше.",
+    tips: "Советы",
+    vsAI: "Против ИИ",
+    vsPlayer: "Против игрока",
+    whiteTurn: "Ход белых",
+    whiteWins: "Белые победили! 🎉",
+    whitePiece: "белая шашка",
+    worstMoment: "Рискованный момент",
+    youWin: "Вы победили! 🎉",
+    yourTurn: "Ваш ход",
+  },
+  kk: {
+    appName: "DamaIQ",
+    appTitle: "Орыс дойбысы",
+    aiThinking: "ЖИ ойлануда...",
+    aiWins: "ЖИ жеңді 😔",
+    analyzeGame: "ЖИ-мен партияны талдау",
+    analysisLoading: "ЖИ партияны талдауда",
+    analysisUnavailable: "Талдау қолжетімсіз. Қайталап көріңіз.",
+    bestMoment: "Ең жақсы сәт",
+    blackTurn: "Қаралардың кезегі",
+    blackWins: "Қаралар жеңді",
+    blackPiece: "қара дойбы",
+    draw: "Тең",
+    darkTheme: "Қараңғы тақырып",
+    easy: "Оңай",
+    easyDesc: "Кездейсоқ жүрістер — жаңадан бастаушылар үшін",
+    emptySquare: "Бос шаршы",
+    gameMode: "Ойын режимі",
+    hard: "Қиын",
+    hardDesc: "Толық минимакс — іс жүзінде мінсіз ойнайды",
+    king: "дамка",
+    closeAnalysis: "Талдауды жабу",
+    kkLanguage: "ҚАЗ",
+    legalMove: "мүмкін жүріс",
+    lightTheme: "Жарық тақырып",
+    localPlayDesc: "Бір құрылғыда кезекпен ойнау",
+    medium: "Орташа",
+    mediumDesc: "Алуды қалайды — нағыз сынақ",
+    moveCount: "Жүрістер саны",
+    moveHistory: "Жүрістер тарихы",
+    noMoves: "Жүрістер осында шығады",
+    movesPlayed: "жүріс",
+    newGame: "Жаңа ойын",
+    playAiDesc: "Ақтармен DamaIQ-ға қарсы ойнаңыз",
+    playerInfo: "Партия",
+    rating: "Баға",
+    ruLanguage: "RU",
+    selectPiece: "Шашканы таңдаңыз",
+    startGame: "Ойынды бастау",
+    tagline: "Ойна. Жеңіл. Жақсар.",
+    tips: "Кеңестер",
+    vsAI: "ЖИ-ға қарсы",
+    vsPlayer: "Ойыншыға қарсы",
+    whiteTurn: "Ақтардың кезегі",
+    whiteWins: "Ақтар жеңді! 🎉",
+    whitePiece: "ақ дойбы",
+    worstMoment: "Қауіпті сәт",
+    youWin: "Сіз жеңдіңіз! 🎉",
+    yourTurn: "Сіздің кезегіңіз",
+  },
+} as const;
+
+export type Language = keyof typeof translations;
+export type TranslationKey = keyof (typeof translations)[typeof DEFAULT_LANGUAGE];
+
+const LANGUAGE_STORAGE_KEY = "damaiq-language";
+
+export function t(key: TranslationKey, language: Language = DEFAULT_LANGUAGE): string {
+  return translations[language][key];
+}
+
+export function getStoredLanguage(): Language {
+  if (typeof window === "undefined") return DEFAULT_LANGUAGE;
+
+  const storedLanguage = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  return isLanguage(storedLanguage) ? storedLanguage : DEFAULT_LANGUAGE;
+}
+
+export function saveLanguage(language: Language): void {
+  if (typeof window === "undefined") return;
+
+  window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+}
+
+export function isLanguage(value: unknown): value is Language {
+  return value === "ru" || value === "kk";
+}
