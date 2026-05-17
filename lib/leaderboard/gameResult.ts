@@ -1,0 +1,45 @@
+import { type AiDifficulty } from "@/lib/ai";
+import { type GameMode } from "@/app/hooks/useGame";
+import { type GameEndPayload, type GameOpponent, type GameResult } from "@/lib/leaderboard/types";
+import { type Move } from "@/lib/russianDraughtsEngine";
+
+export function opponentFromMode(gameMode: GameMode, aiDifficulty: AiDifficulty): GameOpponent {
+  if (gameMode === "pvp") return "pvp";
+  if (aiDifficulty === "easy") return "ai_easy";
+  if (aiDifficulty === "medium") return "ai_medium";
+  return "ai_hard";
+}
+
+export function resultForPlayer(
+  winner: "white" | "black" | null,
+  legalMoveCount: number,
+): GameResult {
+  if (!winner && legalMoveCount === 0) return "draw";
+  if (winner === "white") return "win";
+  if (winner === "black") return "loss";
+  return "draw";
+}
+
+export function buildGameEndPayload({
+  gameMode,
+  aiDifficulty,
+  winner,
+  legalMoveCount,
+  moves,
+  durationSeconds,
+}: {
+  gameMode: GameMode;
+  aiDifficulty: AiDifficulty;
+  winner: "white" | "black" | null;
+  legalMoveCount: number;
+  moves: Move[];
+  durationSeconds: number;
+}): GameEndPayload {
+  return {
+    opponent: opponentFromMode(gameMode, aiDifficulty),
+    result: resultForPlayer(winner, legalMoveCount),
+    totalMoves: moves.length,
+    durationSeconds,
+    moves,
+  };
+}

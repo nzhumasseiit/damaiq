@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+
+import AuthInit from "@/app/components/AuthInit";
 import "./globals.css";
 
 const inter = Inter({
@@ -22,7 +24,10 @@ export default function RootLayout({
       <head>
         <link rel="preload" href="/mascot.svg" as="image" type="image/svg+xml" />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AuthInit />
+        {children}
+      </body>
     </html>
   );
 }

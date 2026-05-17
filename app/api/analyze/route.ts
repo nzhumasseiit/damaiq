@@ -24,13 +24,25 @@ promotion opportunities. Format response as JSON with fields:
 summary (1-2 sentences), tips (array of 3-5 strings), 
 bestMoment (string), worstMoment (string), rating (1-10 integer)`;
 
+const MOCK_ANALYSIS = {
+  summary: "Хорошая партия!",
+  tips: [
+    "Контролируйте центр доски",
+    "Старайтесь создавать дамки раньше соперника",
+    "Защищайте шашки в паре",
+  ],
+  rating: 7,
+  bestMoment: "Грамотное взятие в середине партии",
+  worstMoment: "Несколько шашек остались без защиты",
+};
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as AnalyzeRequest;
     const apiKey = process.env.ANTHROPIC_API_KEY;
 
-    if (!apiKey) {
-      throw new Error("Missing ANTHROPIC_API_KEY.");
+    if (!apiKey || apiKey === "your_key_here") {
+      return Response.json(MOCK_ANALYSIS);
     }
 
     const playerResult = body.winner === body.playerColor ? "won" : "lost";

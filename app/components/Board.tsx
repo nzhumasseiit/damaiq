@@ -1,13 +1,30 @@
 "use client";
 
 import confetti from "canvas-confetti";
-import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { type AiDifficulty } from "@/lib/ai";
+import AppHeader from "@/app/components/AppHeader";
+import BackgroundPattern from "@/app/components/BackgroundPattern";
 import CoachPanel from "@/app/components/CoachPanel";
+import Mascot from "@/app/components/Mascot";
+import PlayerSetupModal from "@/app/components/PlayerSetupModal";
 import { useGame, type GameMode } from "@/app/hooks/useGame";
+import { buildGameEndPayload } from "@/lib/leaderboard/gameResult";
+import { getPlayerProfile } from "@/lib/leaderboard/local";
+import { recordGameResult } from "@/lib/leaderboard/service";
 import { type Language, getStoredLanguage, saveLanguage, t } from "@/lib/i18n";
+import {
+  classNames,
+  eyebrowClassName,
+  getStoredTheme,
+  pageClassName,
+  panelClassName,
+  secondaryTextClassName,
+  THEME_STORAGE_KEY,
+  type Theme,
+} from "@/lib/ui";
 import {
   type Board as GameBoard,
   type Move,
@@ -20,10 +37,7 @@ import {
 const BOARD_SIZE = 8;
 const PLAYABLE_SQUARES = 32;
 const ANIMATION_MS = 260;
-const THEME_STORAGE_KEY = "damaiq-theme";
-
 type AnimationPhase = "from" | "to" | "idle";
-type Theme = "dark" | "light";
 
 export default function Board() {
   const {
@@ -66,6 +80,9 @@ export default function Board() {
   const [theme, setTheme] = useState<Theme>("dark");
   const [hasStarted, setHasStarted] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [showPlayerSetup, setShowPlayerSetup] = useState(false);
+  const gameRecordedRef = useRef(false);
+  const gameStartedAtRef = useRef<number | null>(null);
 
   const isDark = theme === "dark";
   const status = getStatusText({
@@ -128,18 +145,61 @@ export default function Board() {
 
   function startGame() {
     resetGame();
+    gameRecordedRef.current = false;
+    gameStartedAtRef.current = Date.now();
     setHasStarted(true);
+  }
+
+  function tryStartGame() {
+    if (!getPlayerProfile()) {
+      setShowPlayerSetup(true);
+      return;
+    }
+    startGame();
   }
 
   function newGame() {
     resetGame();
+    gameRecordedRef.current = false;
+    gameStartedAtRef.current = null;
     setHasStarted(false);
   }
+
+  useEffect(() => {
+    if (!hasStarted || !hasHydrated) return;
+
+    const gameOver = winner !== null || legalMoves.length === 0;
+    if (!gameOver || gameRecordedRef.current) return;
+
+    gameRecordedRef.current = true;
+    const durationSeconds = gameStartedAtRef.current
+      ? Math.max(1, Math.round((Date.now() - gameStartedAtRef.current) / 1000))
+      : 0;
+
+    void recordGameResult(
+      buildGameEndPayload({
+        aiDifficulty,
+        durationSeconds,
+        gameMode,
+        legalMoveCount: legalMoves.length,
+        moves: moveHistory,
+        winner,
+      }),
+    );
+  }, [
+    aiDifficulty,
+    gameMode,
+    hasHydrated,
+    hasStarted,
+    legalMoves.length,
+    moveHistory,
+    winner,
+  ]);
 
   if (!hasStarted) {
     return (
       <main className={pageClassName(isDark, "min-h-screen overflow-hidden")}>
-        <BackgroundPattern />
+        <BackgroundPattern isDark={isDark} />
         <AppHeader
           isDark={isDark}
           language={language}
@@ -154,15 +214,25 @@ export default function Board() {
           language={language}
           setAiDifficulty={setAiDifficulty}
           setGameMode={setGameMode}
-          startGame={startGame}
+          startGame={tryStartGame}
         />
+        {showPlayerSetup ? (
+          <PlayerSetupModal
+            isDark={isDark}
+            language={language}
+            onComplete={() => {
+              setShowPlayerSetup(false);
+              startGame();
+            }}
+          />
+        ) : null}
       </main>
     );
   }
 
   return (
     <main className={pageClassName(isDark, "min-h-screen")}>
-      <BackgroundPattern />
+      <BackgroundPattern isDark={isDark} />
       <AppHeader
         isDark={isDark}
         language={language}
@@ -261,15 +331,26 @@ export default function Board() {
             status={status.text}
           />
           <MoveHistory isDark={isDark} language={language} moves={moveHistory} />
+          {winner ? <ViewLeaderboardLink isDark={isDark} language={language} /> : null}
           {gameMode === "ai" && winner ? (
-            <CoachPanel
-              difficulty={aiDifficulty}
-              isDark={isDark}
-              language={language}
-              moves={moveHistory}
-              playerColor="white"
-              winner={winner}
-            />
+            <>
+              {winner === "white" ? (
+                <ShareResultButton
+                  aiDifficulty={aiDifficulty}
+                  isDark={isDark}
+                  language={language}
+                  moveCount={moveHistory.length}
+                />
+              ) : null}
+              <CoachPanel
+                difficulty={aiDifficulty}
+                isDark={isDark}
+                language={language}
+                moves={moveHistory}
+                playerColor="white"
+                winner={winner}
+              />
+            </>
           ) : null}
         </aside>
       </section>
@@ -277,51 +358,19 @@ export default function Board() {
   );
 }
 
-function AppHeader({
-  isDark,
-  language,
-  setLanguage,
-  setTheme,
-  theme,
-}: {
-  isDark: boolean;
-  language: Language;
-  setLanguage: (language: Language) => void;
-  setTheme: (theme: Theme) => void;
-  theme: Theme;
-}) {
+function ViewLeaderboardLink({ isDark, language }: { isDark: boolean; language: Language }) {
   return (
-    <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
-      <div className="flex items-center gap-3">
-        <Image
-          src="/mascot.svg"
-          alt=""
-          width={24}
-          height={24}
-          className="h-6 w-6 rounded-full bg-amber-400/15 object-contain"
-          priority
-        />
-        <span className={classNames("text-lg font-bold tracking-tight", isDark ? "text-[#F5F5F5]" : "text-stone-950")}>
-          {t("appName", language)}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <LanguageToggle isDark={isDark} language={language} setLanguage={setLanguage} />
-        <button
-          type="button"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          aria-label={theme === "dark" ? t("lightTheme", language) : t("darkTheme", language)}
-          className={classNames(
-            "flex h-10 w-10 items-center justify-center rounded-full border text-base transition duration-200 ease-in-out hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
-            isDark
-              ? "border-[#2A2A2A] bg-[#1A1A1A] text-[#F5F5F5]"
-              : "border-stone-200 bg-white text-stone-950 shadow-sm",
-          )}
-        >
-          {theme === "dark" ? "☀" : "☾"}
-        </button>
-      </div>
-    </header>
+    <Link
+      href="/leaderboard"
+      className={classNames(
+        "flex min-h-11 w-full items-center justify-center rounded-2xl border px-4 py-2 text-sm font-semibold transition duration-200 ease-in-out hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
+        isDark
+          ? "border-[#2A2A2A] bg-[#141414] text-amber-300 hover:border-[#F59E0B]/40"
+          : "border-stone-200 bg-white text-amber-700 hover:border-amber-300",
+      )}
+    >
+      {t("viewLeaderboard", language)} →
+    </Link>
   );
 }
 
@@ -343,24 +392,27 @@ function LandingScreen({
   startGame: () => void;
 }) {
   return (
-    <section className="relative z-10 flex min-h-[calc(100vh-72px)] items-center justify-center px-4 py-10">
-      <div className="flex w-full max-w-5xl flex-col items-center text-center">
-        <Image
-          src="/mascot.svg"
-          alt=""
-          width={112}
-          height={112}
-          className="mb-6 h-24 w-24 rounded-[2rem] bg-amber-400/10 p-3 shadow-2xl shadow-amber-950/40 sm:h-28 sm:w-28"
-          priority
-        />
-        <h1 className={classNames("text-[clamp(3.5rem,12vw,8rem)] font-bold leading-none tracking-tight", isDark ? "text-[#F5F5F5]" : "text-stone-950")}>
-          {t("appName", language)}
-        </h1>
-        <p className="mt-4 text-[clamp(1rem,2vw,1.35rem)] font-medium text-amber-300">
-          {t("tagline", language)}
-        </p>
+    <section className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center px-4 pb-12 pt-2 text-center sm:pt-4">
+      <Mascot size="lg" className="mb-3" />
+      <h1
+        className={classNames(
+          "text-[clamp(2.25rem,7vw,3.75rem)] font-extrabold leading-none tracking-tight",
+          isDark ? "text-[#F5F5F5]" : "text-stone-950",
+        )}
+      >
+        {t("appName", language)}
+      </h1>
+      <p className="mt-2 text-base font-medium text-amber-400 sm:text-lg">{t("tagline", language)}</p>
 
-        <div className="mt-10 grid w-full gap-4 md:grid-cols-2">
+      <div
+        className={classNames(
+          "mt-6 w-full rounded-2xl border p-5 text-left sm:p-6",
+          isDark ? "border-[#2A2A2A] bg-[#141414]/90" : "border-stone-200 bg-white/90",
+        )}
+      >
+        <p className={eyebrowClassName(isDark)}>{t("gameSetup", language)}</p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <ModeCard
             active={gameMode === "pvp"}
             description={t("localPlayDesc", language)}
@@ -380,7 +432,7 @@ function LandingScreen({
         </div>
 
         {gameMode === "ai" ? (
-          <div className="mt-5 grid w-full gap-3 sm:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <DifficultyPill
               active={aiDifficulty === "easy"}
               description={t("easyDesc", language)}
@@ -408,44 +460,13 @@ function LandingScreen({
         <button
           type="button"
           onClick={startGame}
-          className="mt-8 min-h-12 rounded-full bg-[#F59E0B] px-8 text-sm font-bold uppercase tracking-wide text-stone-950 shadow-xl shadow-amber-950/30 transition duration-200 ease-in-out hover:-translate-y-1 hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-amber-200"
+          className="mt-5 flex h-14 w-full min-w-[240px] items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-[#F59E0B] to-[#D97706] px-8 text-sm font-bold uppercase tracking-widest text-stone-950 shadow-lg shadow-amber-950/35 transition duration-200 ease-in-out hover:-translate-y-0.5 hover:brightness-110 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-200 sm:mx-auto sm:w-auto"
         >
+          <span aria-hidden="true">♟</span>
           {t("startGame", language)}
         </button>
       </div>
     </section>
-  );
-}
-
-function LanguageToggle({
-  isDark,
-  language,
-  setLanguage,
-}: {
-  isDark: boolean;
-  language: Language;
-  setLanguage: (language: Language) => void;
-}) {
-  return (
-    <div className={classNames("flex min-h-10 rounded-full border p-1 shadow-lg backdrop-blur", isDark ? "border-[#2A2A2A] bg-[#1A1A1A]" : "border-stone-200 bg-white")}>
-      {(["ru", "kk"] as const).map((option) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => setLanguage(option)}
-          className={classNames(
-            "min-h-8 rounded-full px-3 text-xs font-bold uppercase tracking-wide transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
-            language === option
-              ? "bg-[#F59E0B] text-stone-950"
-              : isDark
-                ? "text-[#888] hover:bg-white/10 hover:text-[#F5F5F5]"
-                : "text-stone-500 hover:bg-stone-100 hover:text-stone-950",
-          )}
-        >
-          {t(option === "ru" ? "ruLanguage" : "kkLanguage", language)}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -468,16 +489,9 @@ function ModeCard({
     <button
       type="button"
       onClick={onClick}
-      className={classNames(
-        "min-h-36 rounded-2xl border p-6 text-left transition duration-300 ease-in-out hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
-        active
-          ? "border-[#F59E0B] bg-[#F59E0B]/12 shadow-xl shadow-amber-950/20"
-          : isDark
-            ? "border-[#2A2A2A] bg-[#1A1A1A] hover:border-amber-500/50"
-            : "border-stone-200 bg-white hover:border-amber-300",
-      )}
+      className={selectionCardClassName({ active, isDark, spacious: true })}
     >
-      <span className="mb-5 block text-3xl text-[#F59E0B]">{icon}</span>
+      <span className="mb-4 block text-[32px] leading-none text-[#F59E0B]">{icon}</span>
       <span className={classNames("block text-lg font-bold tracking-tight", isDark ? "text-[#F5F5F5]" : "text-stone-950")}>
         {title}
       </span>
@@ -505,17 +519,10 @@ function DifficultyPill({
     <button
       type="button"
       onClick={onClick}
-      className={classNames(
-        "min-h-20 rounded-2xl border px-5 py-4 text-left transition duration-300 ease-in-out hover:-translate-y-1 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
-        active
-          ? "border-[#F59E0B] bg-[#F59E0B] text-stone-950"
-          : isDark
-            ? "border-[#2A2A2A] bg-[#1A1A1A] text-[#F5F5F5] hover:border-amber-500/50"
-            : "border-stone-200 bg-white text-stone-900 hover:border-amber-300",
-      )}
+      className={selectionCardClassName({ active, isDark })}
     >
       <span className="block text-xs font-bold uppercase tracking-wide">{label}</span>
-      <span className={classNames("mt-2 block text-xs leading-5", active ? "text-stone-800" : isDark ? "text-[#888]" : "text-stone-500")}>
+      <span className={classNames("mt-2 block text-xs leading-5", isDark ? "text-[#888]" : "text-stone-500")}>
         {description}
       </span>
     </button>
@@ -948,48 +955,66 @@ function playableIndex(row: number, column: number) {
   return index;
 }
 
-function pageClassName(isDark: boolean, extra: string) {
-  return classNames(
-    "relative font-sans transition-colors duration-300 ease-in-out",
-    isDark ? "bg-[#0F0F0F] text-[#F5F5F5]" : "bg-[#F7F0E5] text-stone-950",
-    extra,
-  );
-}
+function ShareResultButton({
+  aiDifficulty,
+  isDark,
+  language,
+  moveCount,
+}: {
+  aiDifficulty: AiDifficulty;
+  isDark: boolean;
+  language: Language;
+  moveCount: number;
+}) {
+  const [copied, setCopied] = useState(false);
 
-function panelClassName(isDark: boolean) {
-  return classNames(
-    "rounded-2xl border p-4 shadow-xl",
-    isDark ? "border-[#2A2A2A] bg-[#1A1A1A] text-[#F5F5F5]" : "border-stone-200 bg-white text-stone-950",
-  );
-}
+  async function shareResult() {
+    const url = window.location.origin;
+    const difficultyLabel = t(aiDifficulty, language);
+    const text = `Я победил ЖИ на уровне ${difficultyLabel} за ${moveCount} ходов в DamaIQ! ${url}`;
 
-function eyebrowClassName(isDark: boolean) {
-  return classNames("text-xs font-bold uppercase tracking-wide", isDark ? "text-[#888]" : "text-stone-500");
-}
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2200);
+    } catch {
+      setCopied(false);
+    }
+  }
 
-function secondaryTextClassName(isDark: boolean) {
-  return classNames("text-sm", isDark ? "text-[#888]" : "text-stone-500");
-}
-
-function getStoredTheme(): Theme {
-  const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
-}
-
-function BackgroundPattern() {
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0 opacity-25"
-      style={{
-        backgroundImage:
-          "linear-gradient(135deg, rgba(240,217,181,0.08) 25%, transparent 25%, transparent 50%, rgba(240,217,181,0.08) 50%, rgba(240,217,181,0.08) 75%, transparent 75%, transparent)",
-        backgroundSize: "96px 96px",
-      }}
-    />
+    <button
+      type="button"
+      onClick={shareResult}
+      className={classNames(
+        "min-h-11 w-full rounded-2xl border px-4 py-2 text-sm font-semibold transition duration-200 ease-in-out hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
+        isDark
+          ? "border-[#2A2A2A] bg-[#141414] text-[#F5F5F5] hover:border-[#F59E0B]/40"
+          : "border-stone-200 bg-white text-stone-950 hover:border-amber-300",
+      )}
+    >
+      {copied ? t("shareCopied", language) : t("shareResult", language)}
+    </button>
   );
 }
 
-function classNames(...classes: Array<string | false | null | undefined>) {
-  return classes.filter(Boolean).join(" ");
+function selectionCardClassName({
+  active,
+  isDark,
+  spacious = false,
+}: {
+  active: boolean;
+  isDark: boolean;
+  spacious?: boolean;
+}) {
+  return classNames(
+    "rounded-2xl border p-4 text-left transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#F59E0B] sm:p-5",
+    spacious && "min-h-32 sm:min-h-36",
+    active
+      ? "border-[#F59E0B40] bg-[#1C1500] shadow-[inset_0_0_20px_rgba(245,158,11,0.08)]"
+      : isDark
+        ? "border-[#2A2A2A] bg-[#141414] hover:border-[#F59E0B]/40"
+        : "border-stone-200 bg-white hover:border-amber-300/60",
+  );
 }
+
