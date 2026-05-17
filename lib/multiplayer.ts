@@ -84,11 +84,12 @@ export async function fetchRoom(code: string): Promise<RoomRecord | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("rooms")
     .select("*")
     .eq("code", normalizeRoomCode(code))
     .maybeSingle();
+  if (error) console.error("[DamaIQ] Room fetch failed:", error);
   return data ? (data as RoomRecord) : null;
 }
 
@@ -96,10 +97,11 @@ export async function persistRoomMove(code: string, board: Board): Promise<void>
   const supabase = getSupabase();
   if (!supabase) return;
 
-  await supabase
+  const { error } = await supabase
     .from("rooms")
     .update({ board_state: board, current_turn: board.turn })
     .eq("code", normalizeRoomCode(code));
+  if (error) console.error("[DamaIQ] Room move persist failed:", error);
 }
 
 export async function persistRoomGameOver(
@@ -109,10 +111,11 @@ export async function persistRoomGameOver(
   const supabase = getSupabase();
   if (!supabase) return;
 
-  await supabase
+  const { error } = await supabase
     .from("rooms")
     .update({ status: "finished", winner })
     .eq("code", normalizeRoomCode(code));
+  if (error) console.error("[DamaIQ] Room game-over persist failed:", error);
 }
 
 export async function broadcastRoomMessage(code: string, message: RoomMessage): Promise<void> {
@@ -125,11 +128,12 @@ export async function broadcastRoomMessage(code: string, message: RoomMessage): 
       if (status === "SUBSCRIBED") resolve();
     });
   });
-  await channel.send({
+  const response = await channel.send({
     type: "broadcast",
     event: "room_message",
     payload: message,
   });
+  if (response !== "ok") console.error("[DamaIQ] Room broadcast failed:", response);
   await supabase.removeChannel(channel);
 }
 

@@ -54,6 +54,7 @@ export async function fetchLeaderboard(cityFilter: City | "all"): Promise<Leader
       if (!error && data && data.length > 0) {
         return (data as SupabaseProfile[]).map(mapProfile);
       }
+      if (error) console.error("[DamaIQ] Leaderboard fetch failed:", error);
     } catch (error) {
       console.warn("[DamaIQ] Leaderboard fetch failed, using localStorage:", error);
     }
@@ -108,6 +109,7 @@ export async function fetchPlayerGames(): Promise<StoredGame[]> {
           createdAt: row.created_at,
         }));
       }
+      if (error) console.error("[DamaIQ] Game history fetch failed:", error);
     } catch (error) {
       console.warn("[DamaIQ] Game history fetch failed, using localStorage:", error);
     }
@@ -125,11 +127,15 @@ export async function ensureSupabaseProfile(
 
   if (profile.profileId) return profile.profileId;
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("profiles")
     .select("id")
     .eq("id", userId)
     .maybeSingle();
+
+  if (existingError) {
+    console.error("[DamaIQ] Profile lookup failed:", existingError);
+  }
 
   if (existing?.id) {
     const withId = { ...profile, profileId: existing.id };
@@ -172,7 +178,7 @@ async function recordGameSupabase(
   const supabase = getSupabase();
   if (!supabase) return;
 
-  await supabase.from("games").insert({
+  const { error: gameError } = await supabase.from("games").insert({
     player_id: profileId,
     opponent: payload.opponent,
     result: payload.result,
@@ -180,8 +186,9 @@ async function recordGameSupabase(
     duration_seconds: payload.durationSeconds,
     move_history: payload.moves.map((move) => move.notation),
   });
+  if (gameError) console.error("[DamaIQ] Supabase game insert failed:", gameError);
 
-  await supabase
+  const { error: profileError } = await supabase
     .from("profiles")
     .update({
       wins: updated.wins,
@@ -193,6 +200,7 @@ async function recordGameSupabase(
       stripe_customer_id: updated.stripeCustomerId ?? null,
     })
     .eq("id", profileId);
+  if (profileError) console.error("[DamaIQ] Supabase profile update failed:", profileError);
 }
 
 export async function getCurrentProfileId(): Promise<string | null> {
@@ -216,7 +224,10 @@ export async function refreshCurrentProfile(): Promise<PlayerProfile | null> {
   if (!profileId || !supabase) return profile;
 
   const { data, error } = await supabase.from("profiles").select("*").eq("id", profileId).maybeSingle();
-  if (error || !data) return profile;
+  if (error || !data) {
+    if (error) console.error("[DamaIQ] Profile refresh failed:", error);
+    return profile;
+  }
 
   const fresh = mapProfile(data as SupabaseProfile);
   savePlayerProfile(fresh);

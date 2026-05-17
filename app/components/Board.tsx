@@ -94,6 +94,7 @@ export default function Board() {
   const [hasStarted, setHasStarted] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [showPlayerSetup, setShowPlayerSetup] = useState(false);
+  const [pendingOnlineAction, setPendingOnlineAction] = useState<"create" | "join" | null>(null);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [roomRole, setRoomRole] = useState<MultiplayerRole | null>(null);
   const [roomStatus, setRoomStatus] = useState<RoomRecord["status"] | null>(null);
@@ -197,13 +198,15 @@ export default function Board() {
     setJoinCode("");
     setMultiplayerMessage(null);
     setOpponentDisconnected(false);
+    setPendingOnlineAction(null);
     gameRecordedRef.current = false;
     gameStartedAtRef.current = null;
     setHasStarted(false);
   }
 
-  async function ensureProfileForOnline(): Promise<string | null> {
+  async function ensureProfileForOnline(action?: "create" | "join"): Promise<string | null> {
     if (!getPlayerProfile()) {
+      if (action) setPendingOnlineAction(action);
       setShowPlayerSetup(true);
       setMultiplayerMessage(t("createProfileFirst", language));
       return null;
@@ -214,14 +217,26 @@ export default function Board() {
       return null;
     }
 
-    const profileId = await getCurrentProfileId();
-    if (!profileId) setMultiplayerMessage(t("supabaseRequired", language));
-    return profileId;
+    try {
+      const profileId = await getCurrentProfileId();
+
+      if (!profileId) {
+        console.error("[DamaIQ] No Supabase profile ID returned from getCurrentProfileId()");
+        setMultiplayerMessage(t("supabaseRequired", language));
+        return null;
+      }
+
+      return profileId;
+    } catch (error) {
+      console.error("[DamaIQ] Failed to get current Supabase profile:", error);
+      setMultiplayerMessage(t("supabaseRequired", language));
+      return null;
+    }
   }
 
   async function startFriendRoom() {
     setMultiplayerMessage(null);
-    const profileId = await ensureProfileForOnline();
+    const profileId = await ensureProfileForOnline("create");
     if (!profileId) return;
 
     try {
@@ -233,14 +248,15 @@ export default function Board() {
       setRoomStatus(room.status);
       setHasStarted(false);
       lastRoomActivityRef.current = nowMs();
-    } catch {
+    } catch (error) {
+      console.error("[DamaIQ] Room create failed:", error);
       setMultiplayerMessage(t("roomCreateFailed", language));
     }
   }
 
   async function joinFriendRoom() {
     setMultiplayerMessage(null);
-    const profileId = await ensureProfileForOnline();
+    const profileId = await ensureProfileForOnline("join");
     if (!profileId) return;
 
     try {
@@ -254,7 +270,8 @@ export default function Board() {
       gameRecordedRef.current = false;
       gameStartedAtRef.current = nowMs();
       lastRoomActivityRef.current = nowMs();
-    } catch {
+    } catch (error) {
+      console.error("[DamaIQ] Room join failed:", error);
       setMultiplayerMessage(t("roomJoinFailed", language));
     }
   }
@@ -420,6 +437,19 @@ export default function Board() {
             language={language}
             onComplete={() => {
               setShowPlayerSetup(false);
+
+              if (pendingOnlineAction === "create") {
+                setPendingOnlineAction(null);
+                void startFriendRoom();
+                return;
+              }
+
+              if (pendingOnlineAction === "join") {
+                setPendingOnlineAction(null);
+                void joinFriendRoom();
+                return;
+              }
+
               startGame();
             }}
           />
@@ -694,7 +724,12 @@ function LandingScreen({
           <button
             type="button"
             onClick={startFriendRoom}
-            className="min-h-12 rounded-2xl border border-[#F59E0B]/50 px-5 text-sm font-bold uppercase tracking-wide text-[#F59E0B] transition duration-200 ease-in-out hover:-translate-y-0.5 hover:bg-[#F59E0B]/10 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
+            className={classNames(
+              "min-h-12 rounded-2xl border px-5 text-sm font-bold uppercase tracking-wide transition duration-200 ease-in-out hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
+              isDark
+                ? "border-[#F59E0B]/50 text-[#F59E0B] hover:bg-[#F59E0B]/10"
+                : "border-[#D97706] bg-[#F59E0B] text-stone-950 shadow-sm hover:brightness-105",
+            )}
           >
             {t("playWithFriend", language)}
           </button>
@@ -1287,7 +1322,8 @@ function ShareResultButton({
       await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2200);
-    } catch {
+    } catch (error) {
+      console.error("[DamaIQ] Share result failed:", error);
       setCopied(false);
     }
   }
@@ -1321,7 +1357,10 @@ function selectionCardClassName({
     "rounded-2xl border p-4 text-left transition duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#F59E0B] sm:p-5",
     spacious && "min-h-32 sm:min-h-36",
     active
-      ? "border-[#F59E0B40] bg-[#1C1500] shadow-[inset_0_0_20px_rgba(245,158,11,0.08)]"
+      ? classNames(
+          "border-[#F59E0B40] bg-[#1C1500] shadow-[inset_0_0_20px_rgba(245,158,11,0.08)]",
+          !isDark && "text-white [&_*]:!text-white",
+        )
       : isDark
         ? "border-[#2A2A2A] bg-[#141414] hover:border-[#F59E0B]/40"
         : "border-stone-200 bg-white hover:border-amber-300/60",
