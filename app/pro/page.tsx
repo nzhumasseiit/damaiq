@@ -6,26 +6,27 @@ import { type ReactNode, useState } from "react";
 import AppHeader from "@/app/components/AppHeader";
 import BackgroundPattern from "@/app/components/BackgroundPattern";
 import { useAppPreferences } from "@/app/hooks/useAppPreferences";
+import { t, type TranslationKey } from "@/lib/i18n";
 import { getCurrentProfileId } from "@/lib/leaderboard/service";
 import { classNames, pageClassName, panelClassName } from "@/lib/ui";
 
 const freeFeatures = [
-  "Игра против ИИ (3 уровня)",
-  "Режим 2 игрока",
-  "Базовый AI Coach (3 совета)",
-  "Городской рейтинг",
-  "Русский + казахский язык",
-];
+  "proFeatureAi",
+  "proFeatureTwoPlayer",
+  "proFeatureBasicCoach",
+  "proFeatureLeaderboard",
+  "proFeatureLanguages",
+] as const satisfies readonly TranslationKey[];
 
 const proFeatures = [
-  "Всё из Free",
-  "Расширенный AI Coach (детальный разбор каждого хода)",
-  "История всех партий + реплей",
-  "Кастомные скины доски (5 тем)",
-  "Приоритетный анализ без очереди",
-  "Без рекламы",
-  "Ранний доступ к новым фичам",
-];
+  "proFeatureAllFree",
+  "proFeatureAdvancedCoach",
+  "proFeatureReplay",
+  "proFeatureBoardSkins",
+  "proFeaturePriority",
+  "proFeatureNoAds",
+  "proFeatureEarlyAccess",
+] as const satisfies readonly TranslationKey[];
 
 export default function ProPage() {
   const { hasHydrated, isDark, language, theme, updateLanguage, updateTheme } = useAppPreferences();
@@ -54,7 +55,7 @@ export default function ProPage() {
       if (!payload.url) throw new Error(payload.error ?? "Checkout unavailable.");
       window.location.href = payload.url;
     } catch {
-      setError("Checkout временно недоступен");
+      setError(t("proUnavailable", language));
     } finally {
       setIsLoading(false);
     }
@@ -74,13 +75,28 @@ export default function ProPage() {
         theme={theme}
       />
 
-      <section className="relative z-10 mx-auto max-w-6xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8">
+      <section
+        className={classNames(
+          "relative z-10 mx-auto max-w-6xl px-4 pb-10 pt-10 text-center sm:px-6 lg:px-8",
+          isDark ? "text-[#F5F5F5]" : "text-zinc-900",
+        )}
+      >
         <p className="text-xs font-black uppercase tracking-[0.28em] text-[#F59E0B]">DamaIQ Pro</p>
-        <h1 className="mx-auto mt-4 max-w-3xl text-[clamp(2.5rem,7vw,5.5rem)] font-black leading-none tracking-tight text-[#F5F5F5]">
-          Играй умнее. Стань сильнее.
+        <h1
+          className={classNames(
+            "mx-auto mt-4 max-w-3xl text-[clamp(2.5rem,7vw,5.5rem)] font-black leading-none tracking-tight",
+            isDark ? "text-[#F5F5F5]" : "text-zinc-950",
+          )}
+        >
+          {t("proHeroTitle", language)}
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[#A3A3A3] sm:text-lg">
-          DamaIQ Pro открывает полный потенциал AI-наставника
+        <p
+          className={classNames(
+            "mx-auto mt-5 max-w-2xl text-base leading-7 sm:text-lg",
+            isDark ? "text-[#A3A3A3]" : "text-zinc-700",
+          )}
+        >
+          {t("proHeroSubtitle", language)}
         </p>
       </section>
 
@@ -96,16 +112,17 @@ export default function ProPage() {
                   : "border-zinc-900 text-zinc-900 hover:border-[#D97706] hover:bg-amber-50",
               )}
             >
-              Играть бесплатно
+              {t("proFreeCta", language)}
             </Link>
           }
           features={freeFeatures}
           isDark={isDark}
-          price="0 ₸ / навсегда"
-          title="Старт"
+          language={language}
+          price={t("proFreePrice", language)}
+          title={t("proFreeTitle", language)}
         />
         <PricingCard
-          badge="Популярно"
+          badge={t("proBadgePopular", language)}
           cta={
             <button
               type="button"
@@ -113,20 +130,21 @@ export default function ProPage() {
               disabled={isLoading}
               className="mt-6 flex min-h-12 w-full items-center justify-center rounded-2xl bg-[#F59E0B] px-5 text-sm font-black uppercase tracking-wide text-stone-950 shadow-lg shadow-amber-950/30 transition hover:-translate-y-0.5 hover:brightness-110 disabled:opacity-60"
             >
-              {isLoading ? "Загрузка..." : "Начать Pro — $4.99"}
+              {isLoading ? t("proLoading", language) : t("proCheckoutCta", language)}
             </button>
           }
           featured
           features={proFeatures}
           isDark={isDark}
-          price="$4.99 / месяц"
+          language={language}
+          price={t("proPrice", language)}
           title="Pro"
         />
       </section>
 
       {error ? <p className="relative z-10 mt-5 text-center text-sm text-red-300">{error}</p> : null}
       {showDemoModal ? (
-        <DemoModal isDark={isDark} onClose={() => setShowDemoModal(false)} />
+        <DemoModal isDark={isDark} language={language} onClose={() => setShowDemoModal(false)} />
       ) : null}
     </main>
   );
@@ -138,14 +156,16 @@ function PricingCard({
   featured = false,
   features,
   isDark,
+  language,
   price,
   title,
 }: {
   badge?: string;
   cta: ReactNode;
   featured?: boolean;
-  features: string[];
+  features: readonly TranslationKey[];
   isDark: boolean;
+  language: Parameters<typeof t>[1];
   price: string;
   title: string;
 }) {
@@ -175,7 +195,7 @@ function PricingCard({
             )}
           >
             <span className="text-[#F59E0B]">✓</span>
-            <span>{feature}</span>
+            <span>{t(feature, language)}</span>
           </li>
         ))}
       </ul>
@@ -184,20 +204,30 @@ function PricingCard({
   );
 }
 
-function DemoModal({ isDark, onClose }: { isDark: boolean; onClose: () => void }) {
+function DemoModal({
+  isDark,
+  language,
+  onClose,
+}: {
+  isDark: boolean;
+  language: Parameters<typeof t>[1];
+  onClose: () => void;
+}) {
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-black/70 px-4">
       <div className={classNames(panelClassName(isDark), "max-w-md text-center")}>
-        <p className="text-lg font-black">Stripe не настроен в этом демо.</p>
-        <p className="mt-3 text-sm leading-6 text-[#A3A3A3]">
-          В продакшне здесь будет оплата подписки.
+        <p className={classNames("text-lg font-black", isDark ? "text-[#F5F5F5]" : "text-zinc-900")}>
+          {t("proDemoTitle", language)}
+        </p>
+        <p className={classNames("mt-3 text-sm leading-6", isDark ? "text-[#A3A3A3]" : "text-zinc-700")}>
+          {t("proDemoDesc", language)}
         </p>
         <button
           type="button"
           onClick={onClose}
           className="mt-5 min-h-11 rounded-2xl bg-[#F59E0B] px-5 text-sm font-black uppercase tracking-wide text-stone-950"
         >
-          Понятно
+          {t("proDemoButton", language)}
         </button>
       </div>
     </div>
