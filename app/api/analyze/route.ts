@@ -6,6 +6,7 @@ type AnalyzeRequest = {
   winner: Player;
   playerColor: Player;
   difficulty: AiDifficulty;
+  isPro?: boolean;
 };
 
 type ClaudeTextBlock = {
@@ -46,10 +47,14 @@ export async function POST(request: Request) {
     }
 
     const playerResult = body.winner === body.playerColor ? "won" : "lost";
+    const detailLevel = body.isPro
+      ? "Give advanced feedback with concrete move-by-move observations where useful."
+      : "Keep this to the free tier: summary plus no more than 3 practical tips.";
     const userPrompt = `The player was ${body.playerColor} and ${playerResult}. 
 Difficulty: ${body.difficulty}. 
 Game had ${body.moves.length} moves total.
 Move sequence: ${body.moves.map((move) => move.notation).join(", ")}
+${detailLevel}
 Provide coaching feedback in Russian.`;
 
     const anthropicResponse = await fetch("https://api.anthropic.com/v1/messages", {
@@ -82,7 +87,15 @@ Provide coaching feedback in Russian.`;
       throw new Error("Claude response did not include text content.");
     }
 
-    return Response.json(parseClaudeJson(text));
+    const analysis = parseClaudeJson(text);
+    if (!body.isPro && isCoachAnalysis(analysis)) {
+      return Response.json({
+        ...analysis,
+        tips: analysis.tips.slice(0, 3),
+      });
+    }
+
+    return Response.json(analysis);
   } catch {
     return Response.json({ error: "Analysis unavailable" }, { status: 500 });
   }
@@ -93,4 +106,13 @@ function parseClaudeJson(text: string): unknown {
   const fencedJson = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)?.[1];
 
   return JSON.parse(fencedJson ?? trimmed);
+}
+
+function isCoachAnalysis(value: unknown): value is { tips: string[] } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "tips" in value &&
+    Array.isArray((value as { tips: unknown }).tips)
+  );
 }

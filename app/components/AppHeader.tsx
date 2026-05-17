@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import Mascot from "@/app/components/Mascot";
 import { type Language, t } from "@/lib/i18n";
+import { getPlayerProfile } from "@/lib/leaderboard/local";
+import { refreshCurrentProfile } from "@/lib/leaderboard/service";
 import { classNames, type Theme } from "@/lib/ui";
 
 function LanguageToggle({
@@ -58,6 +61,17 @@ export default function AppHeader({
   setTheme: (theme: Theme) => void;
   theme: Theme;
 }) {
+  const [isPro, setIsPro] = useState(false);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      const profile = getPlayerProfile();
+      setIsPro(Boolean(profile?.isPro));
+    }, 0);
+    void refreshCurrentProfile().then((fresh) => setIsPro(Boolean(fresh?.isPro)));
+    return () => window.clearTimeout(timeout);
+  }, []);
+
   return (
     <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
       <Link href="/" className="flex min-w-0 items-center gap-3">
@@ -72,6 +86,15 @@ export default function AppHeader({
         </span>
       </Link>
       <div className="flex shrink-0 items-center gap-2">
+        {!isPro ? (
+          <Link
+            href="/pro"
+            className="inline-flex min-h-10 items-center rounded-full bg-[#F59E0B] px-3 py-2 text-xs font-black uppercase tracking-wide text-stone-950 shadow-lg shadow-amber-950/20 transition duration-200 ease-in-out hover:-translate-y-0.5 hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-amber-200"
+          >
+            <span className="hidden sm:inline">{t("upgradeToPro", language)}</span>
+            <span className="sm:hidden">{t("proShort", language)}</span>
+          </Link>
+        ) : null}
         <Link
           href="/leaderboard"
           className={classNames(

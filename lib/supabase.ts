@@ -30,6 +30,8 @@ export type SupabaseProfile = {
   total_games: number;
   win_streak: number;
   best_streak: number;
+  is_pro: boolean;
+  stripe_customer_id: string | null;
   created_at: string;
 };
 

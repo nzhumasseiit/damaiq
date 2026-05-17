@@ -5,6 +5,7 @@ import { type Move } from "@/lib/russianDraughtsEngine";
 
 export function opponentFromMode(gameMode: GameMode, aiDifficulty: AiDifficulty): GameOpponent {
   if (gameMode === "pvp") return "pvp";
+  if (gameMode === "online") return "online";
   if (aiDifficulty === "easy") return "ai_easy";
   if (aiDifficulty === "medium") return "ai_medium";
   return "ai_hard";
@@ -13,10 +14,11 @@ export function opponentFromMode(gameMode: GameMode, aiDifficulty: AiDifficulty)
 export function resultForPlayer(
   winner: "white" | "black" | null,
   legalMoveCount: number,
+  playerColor: "white" | "black" = "white",
 ): GameResult {
   if (!winner && legalMoveCount === 0) return "draw";
-  if (winner === "white") return "win";
-  if (winner === "black") return "loss";
+  if (winner === playerColor) return "win";
+  if (winner) return "loss";
   return "draw";
 }
 
@@ -27,6 +29,7 @@ export function buildGameEndPayload({
   legalMoveCount,
   moves,
   durationSeconds,
+  playerColor = "white",
 }: {
   gameMode: GameMode;
   aiDifficulty: AiDifficulty;
@@ -34,10 +37,11 @@ export function buildGameEndPayload({
   legalMoveCount: number;
   moves: Move[];
   durationSeconds: number;
+  playerColor?: "white" | "black";
 }): GameEndPayload {
   return {
     opponent: opponentFromMode(gameMode, aiDifficulty),
-    result: resultForPlayer(winner, legalMoveCount),
+    result: resultForPlayer(winner, legalMoveCount, playerColor),
     totalMoves: moves.length,
     durationSeconds,
     moves,

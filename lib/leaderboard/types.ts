@@ -9,6 +9,8 @@ export type PlayerProfile = {
   totalGames: number;
   winStreak: number;
   bestStreak: number;
+  isPro?: boolean;
+  stripeCustomerId?: string;
   profileId?: string;
 };
 
@@ -16,7 +18,7 @@ export type LeaderboardEntry = PlayerProfile;
 
 export type GameResult = "win" | "loss" | "draw";
 
-export type GameOpponent = "ai_easy" | "ai_medium" | "ai_hard" | "pvp";
+export type GameOpponent = "ai_easy" | "ai_medium" | "ai_hard" | "pvp" | "online";
 
 export type StoredGame = {
   id: string;

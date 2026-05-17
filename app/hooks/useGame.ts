@@ -9,11 +9,12 @@ import {
   type Player,
   applyMove,
   createInitialBoard,
+  getLegalMoves,
   getWinner,
   getMovesForPiece,
 } from "@/lib/russianDraughtsEngine";
 
-export type GameMode = "pvp" | "ai";
+export type GameMode = "pvp" | "ai" | "online";
 
 export type UseGameState = {
   board: Board;
@@ -30,7 +31,9 @@ export type UseGameState = {
   setGameMode: (mode: GameMode) => void;
   setAiDifficulty: (difficulty: AiDifficulty) => void;
   setIsCasualMode: (enabled: boolean) => void;
-  selectSquare: (index: number) => void;
+  selectSquare: (index: number) => Move | null;
+  applyRemoteMove: (move: Move) => boolean;
+  replaceBoard: (board: Board) => void;
   resetGame: () => void;
 };
 
@@ -72,8 +75,8 @@ export function useGame(): UseGameState {
     setLegalMovesForSelected([]);
   }
 
-  function selectSquare(index: number) {
-    if (isAiThinking || (gameMode === "ai" && board.turn === "black")) return;
+  function selectSquare(index: number): Move | null {
+    if (isAiThinking || (gameMode === "ai" && board.turn === "black")) return null;
 
     const selectedMove = legalMovesForSelected.find((move) => move.to === index);
     if (selectedMove) {
@@ -88,22 +91,51 @@ export function useGame(): UseGameState {
         setIsAiThinking(true);
       }
       clearSelection();
-      return;
+      return selectedMove;
     }
 
     if (selectedSquare === index) {
       clearSelection();
-      return;
+      return null;
     }
 
     const moves = getMovesForPiece(board, index, { casualMode: isCasualMode });
     if (moves.length === 0) {
       clearSelection();
-      return;
+      return null;
     }
 
     setSelectedSquare(index);
     setLegalMovesForSelected(moves);
+    return null;
+  }
+
+  function applyRemoteMove(move: Move): boolean {
+    const legalMove = getLegalMoves(board, { casualMode: isCasualMode }).find(
+      (candidate) =>
+        candidate.notation === move.notation &&
+        candidate.from === move.from &&
+        candidate.to === move.to,
+    );
+    if (!legalMove) return false;
+
+    const nextBoard = applyMove(board, legalMove);
+    setBoard(nextBoard);
+    setGameHistory((history) => [...history, nextBoard]);
+    setMoveHistory((history) => [...history, legalMove]);
+    setLastMove(legalMove);
+    setLastMoveBy(board.turn);
+    clearSelection();
+    return true;
+  }
+
+  function replaceBoard(nextBoard: Board) {
+    setBoard(nextBoard);
+    setGameHistory([nextBoard]);
+    setMoveHistory([]);
+    setLastMove(null);
+    setLastMoveBy(null);
+    clearSelection();
   }
 
   function resetGame() {
@@ -143,6 +175,8 @@ export function useGame(): UseGameState {
     setAiDifficulty,
     setIsCasualMode,
     selectSquare,
+    applyRemoteMove,
+    replaceBoard,
     resetGame,
   };
 }

@@ -32,6 +32,8 @@ function mapProfile(row: SupabaseProfile): LeaderboardEntry {
     totalGames: row.total_games,
     winStreak: row.win_streak,
     bestStreak: row.best_streak,
+    isPro: row.is_pro,
+    stripeCustomerId: row.stripe_customer_id ?? undefined,
     profileId: row.id,
   };
 }
@@ -114,7 +116,7 @@ export async function fetchPlayerGames(): Promise<StoredGame[]> {
   return getLocalGames();
 }
 
-async function ensureSupabaseProfile(
+export async function ensureSupabaseProfile(
   userId: string,
   profile: PlayerProfile,
 ): Promise<string | null> {
@@ -146,6 +148,8 @@ async function ensureSupabaseProfile(
       total_games: profile.totalGames,
       win_streak: profile.winStreak,
       best_streak: profile.bestStreak,
+      is_pro: profile.isPro ?? false,
+      stripe_customer_id: profile.stripeCustomerId ?? null,
     })
     .select("id")
     .single();
@@ -185,8 +189,38 @@ async function recordGameSupabase(
       total_games: updated.totalGames,
       win_streak: updated.winStreak,
       best_streak: updated.bestStreak,
+      is_pro: updated.isPro ?? false,
+      stripe_customer_id: updated.stripeCustomerId ?? null,
     })
     .eq("id", profileId);
+}
+
+export async function getCurrentProfileId(): Promise<string | null> {
+  const profile = getPlayerProfile();
+  if (!profile) return null;
+
+  if (!isSupabaseConfigured()) return profile.profileId ?? null;
+
+  const userId = await ensureAnonymousSession();
+  if (!userId) return profile.profileId ?? null;
+
+  return ensureSupabaseProfile(userId, profile);
+}
+
+export async function refreshCurrentProfile(): Promise<PlayerProfile | null> {
+  const profile = getPlayerProfile();
+  if (!profile || !isSupabaseConfigured()) return profile;
+
+  const profileId = await getCurrentProfileId();
+  const supabase = getSupabase();
+  if (!profileId || !supabase) return profile;
+
+  const { data, error } = await supabase.from("profiles").select("*").eq("id", profileId).maybeSingle();
+  if (error || !data) return profile;
+
+  const fresh = mapProfile(data as SupabaseProfile);
+  savePlayerProfile(fresh);
+  return fresh;
 }
 
 export async function recordGameResult(payload: GameEndPayload): Promise<PlayerProfile | null> {
@@ -245,6 +279,7 @@ export function createInitialProfile(nickname: string, city: City): PlayerProfil
     totalGames: 0,
     winStreak: 0,
     bestStreak: 0,
+    isPro: false,
   };
 }
 

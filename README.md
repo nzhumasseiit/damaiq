@@ -52,6 +52,14 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 
 If Supabase is unavailable or keys are missing, the app falls back to `localStorage` silently (warnings only in the browser console).
 
+## Multiplayer
+
+DamaIQ supports real-time multiplayer via shared room codes (e.g. `DAMA-4829`) powered by Supabase Realtime Broadcast channels. No accounts required — share the code, start playing instantly.
+
+## Monetization
+
+DamaIQ Pro ($4.99/month) unlocks advanced AI coaching, full game history with replay, and custom board themes. Stripe integration is implemented for subscription payments. Free tier is fully functional with no artificial limitations on core gameplay.
+
 ## AI Coach
 
 После партии игрок может запросить разбор через AI Coach.

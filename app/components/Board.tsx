@@ -13,8 +13,19 @@ import PlayerSetupModal from "@/app/components/PlayerSetupModal";
 import { useGame, type GameMode } from "@/app/hooks/useGame";
 import { buildGameEndPayload } from "@/lib/leaderboard/gameResult";
 import { getPlayerProfile } from "@/lib/leaderboard/local";
-import { recordGameResult } from "@/lib/leaderboard/service";
+import { getCurrentProfileId, recordGameResult } from "@/lib/leaderboard/service";
 import { type Language, getStoredLanguage, saveLanguage, t } from "@/lib/i18n";
+import {
+  type MultiplayerRole,
+  type RoomRecord,
+  broadcastRoomMessage,
+  createRoom,
+  isMultiplayerConfigured,
+  joinRoom,
+  persistRoomGameOver,
+  persistRoomMove,
+  subscribeToRoom,
+} from "@/lib/multiplayer";
 import {
   classNames,
   eyebrowClassName,
@@ -31,6 +42,7 @@ import {
   type Piece,
   getLegalMoves,
   getWinner,
+  applyMove,
   positionToNotation,
 } from "@/lib/russianDraughtsEngine";
 
@@ -38,6 +50,10 @@ const BOARD_SIZE = 8;
 const PLAYABLE_SQUARES = 32;
 const ANIMATION_MS = 260;
 type AnimationPhase = "from" | "to" | "idle";
+
+function nowMs(): number {
+  return globalThis.performance?.now() ?? new Date().getTime();
+}
 
 export default function Board() {
   const {
@@ -56,6 +72,8 @@ export default function Board() {
     setAiDifficulty,
     setIsCasualMode,
     selectSquare,
+    applyRemoteMove,
+    replaceBoard,
     resetGame,
   } = useGame();
 
@@ -63,11 +81,6 @@ export default function Board() {
   const legalMoves = useMemo(
     () => getLegalMoves(board, { casualMode: isCasualMode }),
     [board, isCasualMode],
-  );
-  const showHumanMoveHints = !(gameMode === "ai" && board.turn === "black");
-  const selectableSquares = useMemo(
-    () => new Set(showHumanMoveHints ? legalMoves.map((move) => move.from) : []),
-    [legalMoves, showHumanMoveHints],
   );
   const destinationMoves = useMemo(
     () => new Map(legalMovesForSelected.map((move) => [move.to, move])),
@@ -81,10 +94,28 @@ export default function Board() {
   const [hasStarted, setHasStarted] = useState(false);
   const [hasHydrated, setHasHydrated] = useState(false);
   const [showPlayerSetup, setShowPlayerSetup] = useState(false);
+  const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [roomRole, setRoomRole] = useState<MultiplayerRole | null>(null);
+  const [roomStatus, setRoomStatus] = useState<RoomRecord["status"] | null>(null);
+  const [joinCode, setJoinCode] = useState("");
+  const [multiplayerMessage, setMultiplayerMessage] = useState<string | null>(null);
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false);
   const gameRecordedRef = useRef(false);
   const gameStartedAtRef = useRef<number | null>(null);
+  const lastRoomActivityRef = useRef(0);
 
   const isDark = theme === "dark";
+  const playerColor = roomRole === "guest" ? "black" : "white";
+  const isOnlineGame = gameMode === "online" && roomCode !== null;
+  const isOnlinePlayerTurn = !isOnlineGame || board.turn === playerColor;
+  const showHumanMoveHints =
+    !(gameMode === "ai" && board.turn === "black") &&
+    isOnlinePlayerTurn &&
+    roomStatus !== "waiting";
+  const selectableSquares = useMemo(
+    () => new Set(showHumanMoveHints ? legalMoves.map((move) => move.from) : []),
+    [legalMoves, showHumanMoveHints],
+  );
   const status = getStatusText({
     winner,
     gameMode,
@@ -146,7 +177,7 @@ export default function Board() {
   function startGame() {
     resetGame();
     gameRecordedRef.current = false;
-    gameStartedAtRef.current = Date.now();
+    gameStartedAtRef.current = nowMs();
     setHasStarted(true);
   }
 
@@ -160,10 +191,147 @@ export default function Board() {
 
   function newGame() {
     resetGame();
+    setRoomCode(null);
+    setRoomRole(null);
+    setRoomStatus(null);
+    setJoinCode("");
+    setMultiplayerMessage(null);
+    setOpponentDisconnected(false);
     gameRecordedRef.current = false;
     gameStartedAtRef.current = null;
     setHasStarted(false);
   }
+
+  async function ensureProfileForOnline(): Promise<string | null> {
+    if (!getPlayerProfile()) {
+      setShowPlayerSetup(true);
+      setMultiplayerMessage(t("createProfileFirst", language));
+      return null;
+    }
+
+    if (!isMultiplayerConfigured()) {
+      setMultiplayerMessage(t("supabaseRequired", language));
+      return null;
+    }
+
+    const profileId = await getCurrentProfileId();
+    if (!profileId) setMultiplayerMessage(t("supabaseRequired", language));
+    return profileId;
+  }
+
+  async function startFriendRoom() {
+    setMultiplayerMessage(null);
+    const profileId = await ensureProfileForOnline();
+    if (!profileId) return;
+
+    try {
+      const room = await createRoom(profileId);
+      setGameMode("online");
+      replaceBoard(room.board_state);
+      setRoomCode(room.code);
+      setRoomRole("host");
+      setRoomStatus(room.status);
+      setHasStarted(false);
+      lastRoomActivityRef.current = nowMs();
+    } catch {
+      setMultiplayerMessage(t("roomCreateFailed", language));
+    }
+  }
+
+  async function joinFriendRoom() {
+    setMultiplayerMessage(null);
+    const profileId = await ensureProfileForOnline();
+    if (!profileId) return;
+
+    try {
+      const room = await joinRoom(joinCode, profileId);
+      setGameMode("online");
+      replaceBoard(room.board_state);
+      setRoomCode(room.code);
+      setRoomRole("guest");
+      setRoomStatus(room.status);
+      setHasStarted(true);
+      gameRecordedRef.current = false;
+      gameStartedAtRef.current = nowMs();
+      lastRoomActivityRef.current = nowMs();
+    } catch {
+      setMultiplayerMessage(t("roomJoinFailed", language));
+    }
+  }
+
+  async function copyRoomInvite() {
+    if (!roomCode) return;
+    await navigator.clipboard.writeText(
+      `Сыграй со мной в DamaIQ! Код: ${roomCode} → damaiq.vercel.app`,
+    );
+    setMultiplayerMessage(t("shareCopied", language));
+  }
+
+  function handleSquareClick(index: number) {
+    if (isOnlineGame && !isOnlinePlayerTurn) return;
+
+    const move = selectSquare(index);
+    if (!move || !roomCode || gameMode !== "online") return;
+
+    lastRoomActivityRef.current = nowMs();
+    setOpponentDisconnected(false);
+    const nextBoard = applyMove(board, move);
+    void persistRoomMove(roomCode, nextBoard);
+    void broadcastRoomMessage(roomCode, { type: "move", move });
+
+    const nextWinner = getWinner(nextBoard);
+    if (nextWinner) {
+      void persistRoomGameOver(roomCode, nextWinner);
+      void broadcastRoomMessage(roomCode, { type: "game_over", winner: nextWinner });
+    }
+  }
+
+  useEffect(() => {
+    if (!roomCode) return;
+
+    return subscribeToRoom(
+      roomCode,
+      (message) => {
+        lastRoomActivityRef.current = nowMs();
+        setOpponentDisconnected(false);
+
+        if (message.type === "move") {
+          const accepted = applyRemoteMove(message.move);
+          if (!accepted) {
+            setMultiplayerMessage(t("invalidRemoteMove", language));
+          }
+        }
+
+        if (message.type === "game_over") {
+          setRoomStatus("finished");
+        }
+      },
+      (room) => {
+        lastRoomActivityRef.current = nowMs();
+        setOpponentDisconnected(false);
+        setRoomStatus(room.status);
+
+        if (room.status === "playing" && !hasStarted) {
+          replaceBoard(room.board_state);
+          setHasStarted(true);
+          gameRecordedRef.current = false;
+          gameStartedAtRef.current = nowMs();
+        }
+      },
+    );
+  }, [applyRemoteMove, hasStarted, language, replaceBoard, roomCode]);
+
+  useEffect(() => {
+    if (!isOnlineGame || roomStatus !== "playing") return;
+
+    const interval = window.setInterval(() => {
+      if (nowMs() - lastRoomActivityRef.current > 60_000) {
+        setOpponentDisconnected(true);
+      }
+    }, 10_000);
+
+    return () => window.clearInterval(interval);
+  }, [isOnlineGame, roomStatus]);
 
   useEffect(() => {
     if (!hasStarted || !hasHydrated) return;
@@ -173,7 +341,7 @@ export default function Board() {
 
     gameRecordedRef.current = true;
     const durationSeconds = gameStartedAtRef.current
-      ? Math.max(1, Math.round((Date.now() - gameStartedAtRef.current) / 1000))
+      ? Math.max(1, Math.round((nowMs() - gameStartedAtRef.current) / 1000))
       : 0;
 
     void recordGameResult(
@@ -183,6 +351,7 @@ export default function Board() {
         gameMode,
         legalMoveCount: legalMoves.length,
         moves: moveHistory,
+        playerColor,
         winner,
       }),
     );
@@ -193,10 +362,34 @@ export default function Board() {
     hasStarted,
     legalMoves.length,
     moveHistory,
+    playerColor,
     winner,
   ]);
 
   if (!hasStarted) {
+    if (roomCode && roomStatus === "waiting") {
+      return (
+        <main className={pageClassName(isDark, "min-h-screen overflow-hidden")}>
+          <BackgroundPattern isDark={isDark} />
+          <AppHeader
+            isDark={isDark}
+            language={language}
+            setLanguage={updateLanguage}
+            setTheme={updateTheme}
+            theme={theme}
+          />
+          <WaitingRoomScreen
+            code={roomCode}
+            isDark={isDark}
+            language={language}
+            message={multiplayerMessage}
+            onCopy={copyRoomInvite}
+            onCancel={newGame}
+          />
+        </main>
+      );
+    }
+
     return (
       <main className={pageClassName(isDark, "min-h-screen overflow-hidden")}>
         <BackgroundPattern isDark={isDark} />
@@ -214,6 +407,11 @@ export default function Board() {
           language={language}
           setAiDifficulty={setAiDifficulty}
           setGameMode={setGameMode}
+          joinCode={joinCode}
+          multiplayerMessage={multiplayerMessage}
+          setJoinCode={setJoinCode}
+          startFriendRoom={startFriendRoom}
+          joinFriendRoom={joinFriendRoom}
           startGame={tryStartGame}
         />
         {showPlayerSetup ? (
@@ -244,6 +442,22 @@ export default function Board() {
       <section className="relative z-10 mx-auto grid w-full max-w-7xl gap-6 px-4 pb-8 pt-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
         <div className="flex min-w-0 flex-col gap-4">
           <StatusBar status={status} />
+          {isOnlineGame ? (
+            <div className={classNames(
+              "mx-auto flex w-full max-w-[min(86vh,720px)] items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold",
+              isDark ? "border-[#2A2A2A] bg-[#141414] text-[#F5F5F5]" : "border-stone-200 bg-white text-stone-800",
+            )}>
+              <span>{t("opponent", language)}: {roomRole === "host" ? t("guestPlayer", language) : t("hostPlayer", language)}</span>
+              {!isOnlinePlayerTurn && !winner ? (
+                <span className="animate-pulse text-[#F59E0B]">{t("opponentTurn", language)}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {opponentDisconnected ? (
+            <div className="mx-auto w-full max-w-[min(86vh,720px)] rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-300">
+              {t("opponentDisconnected", language)}
+            </div>
+          ) : null}
           {showHumanMoveHints && legalMovesForSelected.length === 0 && !winner ? (
             <p className="text-center text-xs font-semibold uppercase tracking-wide text-amber-200/80">
               {t("selectPiece", language)}
@@ -287,7 +501,7 @@ export default function Board() {
                     <button
                       key={square}
                       type="button"
-                      onClick={() => selectSquare(index)}
+                      onClick={() => handleSquareClick(index)}
                       aria-label={ariaLabel(index, piece, move, language)}
                       className={squareClassName({ latestDestination, selected, selectable, move })}
                     >
@@ -378,17 +592,27 @@ function LandingScreen({
   aiDifficulty,
   gameMode,
   isDark,
+  joinCode,
+  joinFriendRoom,
   language,
+  multiplayerMessage,
   setAiDifficulty,
   setGameMode,
+  setJoinCode,
+  startFriendRoom,
   startGame,
 }: {
   aiDifficulty: AiDifficulty;
   gameMode: GameMode;
   isDark: boolean;
+  joinCode: string;
+  joinFriendRoom: () => void;
   language: Language;
+  multiplayerMessage: string | null;
   setAiDifficulty: (difficulty: AiDifficulty) => void;
   setGameMode: (mode: GameMode) => void;
+  setJoinCode: (code: string) => void;
+  startFriendRoom: () => void;
   startGame: () => void;
 }) {
   return (
@@ -465,6 +689,92 @@ function LandingScreen({
           <span aria-hidden="true">♟</span>
           {t("startGame", language)}
         </button>
+
+        <div className="mt-4 grid gap-3 rounded-2xl border border-[#F59E0B]/20 bg-[#F59E0B]/5 p-4 sm:grid-cols-[1fr_auto]">
+          <button
+            type="button"
+            onClick={startFriendRoom}
+            className="min-h-12 rounded-2xl border border-[#F59E0B]/50 px-5 text-sm font-bold uppercase tracking-wide text-[#F59E0B] transition duration-200 ease-in-out hover:-translate-y-0.5 hover:bg-[#F59E0B]/10 focus:outline-none focus:ring-2 focus:ring-[#F59E0B]"
+          >
+            {t("playWithFriend", language)}
+          </button>
+          <div className="flex min-w-0 gap-2">
+            <input
+              value={joinCode}
+              onChange={(event) => setJoinCode(event.target.value)}
+              placeholder="DAMA-4829"
+              className={classNames(
+                "min-h-12 min-w-0 flex-1 rounded-2xl border px-4 text-sm font-bold uppercase tracking-widest outline-none transition focus:ring-2 focus:ring-[#F59E0B]",
+                isDark
+                  ? "border-[#2A2A2A] bg-[#0F0F0F] text-[#F5F5F5] placeholder:text-[#555]"
+                  : "border-stone-200 bg-white text-stone-950 placeholder:text-stone-400",
+              )}
+            />
+            <button
+              type="button"
+              onClick={joinFriendRoom}
+              className="min-h-12 rounded-2xl bg-[#F59E0B] px-4 text-xs font-black uppercase tracking-wide text-stone-950 transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-amber-200"
+            >
+              {t("joinRoom", language)}
+            </button>
+          </div>
+        </div>
+
+        {multiplayerMessage ? (
+          <p className="mt-3 text-center text-xs font-semibold text-amber-300">
+            {multiplayerMessage}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function WaitingRoomScreen({
+  code,
+  isDark,
+  language,
+  message,
+  onCancel,
+  onCopy,
+}: {
+  code: string;
+  isDark: boolean;
+  language: Language;
+  message: string | null;
+  onCancel: () => void;
+  onCopy: () => void;
+}) {
+  return (
+    <section className="relative z-10 mx-auto flex min-h-[70vh] w-full max-w-xl flex-col items-center justify-center px-4 text-center">
+      <div className={classNames(panelClassName(isDark), "w-full")}>
+        <p className={eyebrowClassName(isDark)}>{t("waitingForFriend", language)}</p>
+        <div className="mt-5 rounded-3xl border border-[#F59E0B]/30 bg-[#F59E0B]/10 px-6 py-8">
+          <p className="text-[clamp(2.25rem,10vw,4.5rem)] font-black tracking-widest text-[#F59E0B]">
+            {code}
+          </p>
+          <div className="mx-auto mt-5 h-8 w-8 animate-spin rounded-full border-2 border-[#F59E0B]/20 border-t-[#F59E0B]" />
+        </div>
+        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={onCopy}
+            className="min-h-12 flex-1 rounded-2xl bg-[#F59E0B] px-5 text-sm font-black uppercase tracking-wide text-stone-950 transition hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-amber-200"
+          >
+            {t("copyInvite", language)}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className={classNames(
+              "min-h-12 flex-1 rounded-2xl border px-5 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-[#F59E0B]",
+              isDark ? "border-[#2A2A2A] text-[#888]" : "border-stone-200 text-stone-600",
+            )}
+          >
+            {t("backToGame", language)}
+          </button>
+        </div>
+        {message ? <p className="mt-4 text-sm font-semibold text-amber-300">{message}</p> : null}
       </div>
     </section>
   );
@@ -1017,4 +1327,3 @@ function selectionCardClassName({
         : "border-stone-200 bg-white hover:border-amber-300/60",
   );
 }
-
