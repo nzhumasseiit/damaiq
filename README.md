@@ -1,3 +1,5 @@
+<img width="1307" height="533" alt="Screenshot 2026-05-17 at 23 48 20" src="https://github.com/user-attachments/assets/d0d2de81-c401-4bd7-b427-ab8d0c9fd79a" />
+<img width="1049" height="835" alt="Screenshot 2026-05-17 at 23 48 59" src="https://github.com/user-attachments/assets/b7333bc8-51be-4c3f-9182-cbfcd2576d77" />
 # DamaIQ
 
 **Русские шашки с AI-разбором, рейтингом городов и двумя режимами правил.**
