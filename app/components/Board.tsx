@@ -459,7 +459,7 @@ export default function Board() {
   }
 
   return (
-    <main className={pageClassName(isDark, "min-h-screen")}>
+    <main className={pageClassName(isDark, "h-dvh overflow-hidden")}>
       <BackgroundPattern isDark={isDark} />
       <AppHeader
         isDark={isDark}
@@ -469,12 +469,12 @@ export default function Board() {
         theme={theme}
       />
 
-      <section className="relative z-10 mx-auto grid w-full max-w-7xl gap-6 px-4 pb-8 pt-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:px-8">
-        <div className="flex min-w-0 flex-col gap-4">
+      <section className="relative z-10 mx-auto grid h-[calc(100dvh-72px)] w-full max-w-7xl gap-4 overflow-hidden px-4 pb-4 pt-2 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
+        <div className="flex min-h-0 min-w-0 flex-col gap-2 overflow-hidden">
           <StatusBar status={status} />
           {isOnlineGame ? (
             <div className={classNames(
-              "mx-auto flex w-full max-w-[min(86vh,720px)] items-center justify-between rounded-2xl border px-4 py-3 text-sm font-semibold",
+              "mx-auto flex w-full max-w-[min(100%,calc(100dvh-190px))] items-center justify-between rounded-2xl border px-4 py-2 text-sm font-semibold",
               isDark ? "border-[#2A2A2A] bg-[#141414] text-[#F5F5F5]" : "border-stone-200 bg-white text-stone-800",
             )}>
               <span>{t("opponent", language)}: {roomRole === "host" ? t("guestPlayer", language) : t("hostPlayer", language)}</span>
@@ -484,7 +484,7 @@ export default function Board() {
             </div>
           ) : null}
           {opponentDisconnected ? (
-            <div className="mx-auto w-full max-w-[min(86vh,720px)] rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-300">
+            <div className="mx-auto w-full max-w-[min(100%,calc(100dvh-190px))] rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-300">
               {t("opponentDisconnected", language)}
             </div>
           ) : null}
@@ -494,7 +494,7 @@ export default function Board() {
             </p>
           ) : null}
 
-          <div className="relative mx-auto w-full max-w-[min(86vh,720px)] overflow-hidden rounded-xl shadow-2xl">
+          <div className="relative mx-auto aspect-square w-full max-w-[min(100%,calc(100dvh-190px))] shrink overflow-hidden rounded-xl shadow-2xl">
             {!hasHydrated ? (
               <SkeletonBoard />
             ) : (
@@ -562,7 +562,7 @@ export default function Board() {
           </div>
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
+        <aside className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto pr-1">
           <InfoPanel
             aiDifficulty={aiDifficulty}
             gameMode={gameMode}

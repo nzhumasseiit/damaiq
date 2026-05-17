@@ -89,7 +89,12 @@ export default function ProPage() {
           cta={
             <Link
               href="/"
-              className="mt-6 flex min-h-12 items-center justify-center rounded-2xl border border-stone-600 px-5 text-sm font-black uppercase tracking-wide text-[#F5F5F5] transition hover:-translate-y-0.5 hover:border-[#F59E0B]"
+              className={classNames(
+                "mt-6 flex min-h-12 items-center justify-center rounded-2xl border px-5 text-sm font-black uppercase tracking-wide transition hover:-translate-y-0.5",
+                isDark
+                  ? "border-stone-600 text-[#F5F5F5] hover:border-[#F59E0B]"
+                  : "border-zinc-900 text-zinc-900 hover:border-[#D97706] hover:bg-amber-50",
+              )}
             >
               Играть бесплатно
             </Link>
@@ -149,6 +154,7 @@ function PricingCard({
       className={classNames(
         panelClassName(isDark),
         "relative text-left",
+        !isDark && "text-zinc-900",
         featured && "border-[#F59E0B]/70 shadow-2xl shadow-amber-950/30",
       )}
     >
@@ -161,7 +167,13 @@ function PricingCard({
       <p className="mt-2 text-3xl font-black text-[#F59E0B]">{price}</p>
       <ul className="mt-6 space-y-3">
         {features.map((feature) => (
-          <li key={feature} className="flex gap-3 text-sm leading-6 text-[#D4D4D4]">
+          <li
+            key={feature}
+            className={classNames(
+              "flex gap-3 text-sm leading-6",
+              isDark ? "text-[#D4D4D4]" : "text-zinc-900",
+            )}
+          >
             <span className="text-[#F59E0B]">✓</span>
             <span>{feature}</span>
           </li>
